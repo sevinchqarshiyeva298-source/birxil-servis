@@ -1,0 +1,39 @@
+name: Build and Auto Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/birxil-image:latest
+
+      - name: Deploy on server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/birxil-image:latest
+            docker stop birxil-konteyner || true
+            docker rm birxil-konteyner || true
+            docker run -d --name birxil-konteyner -p 5000:5000 --restart always ${{ secrets.DOCKERHUB_USERNAME }}/birxil-image:latest
